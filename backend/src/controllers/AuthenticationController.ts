@@ -1,36 +1,47 @@
 import { Request, Response } from "express";
 import { database } from "../services/database.js";
 import { User } from "../entities/User.js";
-import jwt from 'jsonwebtoken'
+import jwt from 'jsonwebtoken';
 import { APP_NAME, SECRET } from "../constants/env.js";
 import { profiles } from "../constants/profiles.js";
+import bcrypt from 'bcrypt'; // Importando biblioteca para hashing de senha
 
 export class AuthenticationController {
   /**
    * POST /auth/sign-in
    */
   public async signIn(req: Request, res: Response) {
-    if (typeof req.body !== 'object') throw new Error('Bad Request: body is required')
+    if (typeof req.body !== 'object') throw new Error('Bad Request: body is required');
 
-    if (typeof req.body.username !== 'string') throw new Error('Bad Request: body.username is required')
+    if (typeof req.body.username !== 'string') throw new Error('Bad Request: body.username is required');
 
-    if (typeof req.body.password !== 'string') throw new Error('Bad Request: body.password is required')
+    if (typeof req.body.password !== 'string') throw new Error('Bad Request: body.password is required');
 
-    const repository = database.getRepository(User)
+    const repository = database.getRepository(User);
 
     const user = await repository.findOneBy([
       { email: req.body.username },
       { username: req.body.username }
-    ])
+    ]);
 
-    if (!user) throw new Error('User not found')
+    if (!user) throw new Error('User not found');
 
-    if (user.password !== req.body.password) throw new Error('Invalid password')
+    // Verificando a senha através do bcrypt(hash)
+    const passwordMatch = await bcrypt.compare(req.body.password, user.password);
+    if (!passwordMatch) throw new Error('Invalid password');
 
-    const profile = profiles[user.profile]
+    // Define o tipo de perfil explicitamente
+    type ProfileType = 'sudo' | 'standard';
 
-    const scopes = profile.scopes(user)
-      
+    // Verifique se o perfil do usuário é válido
+    if (!['sudo', 'standard'].includes(user.profile)) {
+      throw new Error('Invalid profile');
+    }
+
+    const profile = profiles[user.profile as ProfileType];
+
+    const scopes = profile.scopes(user);
+
     const accessToken = await new Promise<string>((resolve, reject) => {
       jwt.sign(
         { scopes: Array.isArray(scopes) ? scopes : [scopes] },
@@ -42,15 +53,15 @@ export class AuthenticationController {
           subject: `user:${user.id}`
         },
         (err, token) => {
-          if (err) return reject(err)
+          if (err) return reject(err);
 
-          if (!token) return reject(new Error())
+          if (!token) return reject(new Error('Failed to generate token'));
 
-          resolve(token)
+          resolve(token);
         }
-      )
-    })
+      );
+    });
 
-    res.json({ access_token: accessToken, token_type: 'Bearer', expires_in: 3600 })
+    res.json({ access_token: accessToken, token_type: 'Bearer', expires_in: 3600 });
   }
 }

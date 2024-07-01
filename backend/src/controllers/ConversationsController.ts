@@ -145,7 +145,9 @@ export class ConversationsController {
         }
 
         if (!user) return res.status(400).json({ message: 'Not Found User' });
-
+        
+        
+        //Autenticação do usuário
         // Ele só pode adicionar mensagens como usuário se tiver permissão para isso
         if (!req.token.scopes.includes('*')) {
           if (!req.token.scopes.includes('users:*')) {

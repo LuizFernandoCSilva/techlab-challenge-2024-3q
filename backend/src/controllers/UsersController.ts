@@ -1,77 +1,93 @@
 import { Request, Response } from "express";
 import { User } from "../entities/User.js";
 import { database } from "../services/database.js";
+import { FindOneOptions } from "typeorm"; // Importe o tipo FindOneOptions do TypeORM
 
 export class UsersController {
   protected get repository() {
-    return database.getRepository(User)
+    return database.getRepository(User);
   }
 
   /**
-   * GET /users
-   */
-  public async find(req: Request, res: Response) {
-    const [users, count] = await this.repository.findAndCount({
-      take: 25,
-      skip: 0
-    })
-
-    res.json({ count, users })
-  }
-
-  /**
-   * GET /users/:user-id
+   * GET /users/:userId
+   * Retorna um usuário específico pelo ID.
    */
   public async findOne(req: Request<{ userId: string }>, res: Response) {
-    const user = await this.repository.findOne({
-      where: { id: req.params.userId }
-    })
-    
-    if (!user) return res.status(404).json({ message: `Not found User with ID ${req.params.userId}` })
-    
-    return res.json(user)
+    const userId = req.params.userId;
+    const options: FindOneOptions<User> = {
+      where: { id: userId },
+      relations: ["posts", "comments"], // Exemplo de opções adicionais
+    };
+
+    try {
+      const user = await this.repository.findOne(options);
+
+      if (!user) {
+        return res.status(404).json({ message: `User with ID ${userId} not found` });
+      }
+
+      res.json(user);
+    } catch (error: any) {
+      res.status(500).json({ message: "Failed to fetch user", error: error.message });
+    }
   }
 
   /**
-   * PUT /users
-   */
-  public async save(req: Request, res: Response) {
-    const user = await this.repository.save(req.body)
-
-    res.status(201)
-      .header('Location', `/users/${user.id}`)
-      .json(user)
-  }
-
-  /**
-   * PATCH /users/:user-id
+   * PATCH /users/:userId
+   * Atualiza um usuário existente pelo ID.
+   * Retorna o usuário atualizado.
+   * Trata erros de validação ou falha na atualização.
    */
   public async update(req: Request<{ userId: string }>, res: Response) {
-    const user = await this.repository.findOne({
-      where: { id: req.params.userId }
-    })
+    const userId = req.params.userId;
+    const options: FindOneOptions<User> = {
+      where: { id: userId },
+      relations: ["posts", "comments"], // Exemplo de opções adicionais
+    };
 
-    if (!user) return res.status(404).json({ message: `Not found User with ID ${req.params.userId}` })
+    try {
+      const user = await this.repository.findOne(options);
 
-    await this.repository.save(
-      this.repository.merge(user, req.body)
-    )
+      if (!user) {
+        return res.status(404).json({ message: `User with ID ${userId} not found` });
+      }
 
-    res.json(user)
+      // Atualiza apenas as propriedades do usuário que foram enviadas no corpo da requisição
+      this.repository.merge(user, req.body);
+      const updatedUser = await this.repository.save(user);
+
+      res.json(updatedUser);
+    } catch (error: any) {
+      res.status(400).json({ message: "Failed to update user", error: error.message });
+    }
   }
 
+
   /**
-   * DELETE /users/:user-id
+   * DELETE /users/:userId
+   * Remove logicamente um usuário pelo ID.
+   * Retorna o usuário removido.
+   * Trata erros de validação ou falha na remoção.
    */
   public async delete(req: Request<{ userId: string }>, res: Response) {
-    const user = await this.repository.findOne({
-      where: { id: req.params.userId }
-    })
+    const userId = req.params.userId;
+    const options: FindOneOptions<User> = {
+      where: { id: userId },
+      relations: ["posts", "comments"], // Exemplo de opções adicionais
+    };
 
-    if (!user) return res.status(404).json({ message: `Not found User with ID ${req.params.userId}` })
+    try {
+      const user = await this.repository.findOne(options);
 
-    await this.repository.softRemove(user)
+      if (!user) {
+        return res.status(404).json({ message: `User with ID ${userId} not found` });
+      }
 
-    res.json(user)
+      await this.repository.softRemove(user);
+
+      res.json(user);
+    } catch (error: any) {
+      res.status(400).json({ message: "Failed to delete user", error: error.message });
+    }
   }
 }

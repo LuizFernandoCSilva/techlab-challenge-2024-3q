@@ -17,4 +17,5 @@ export const profiles = {
     ],
     allowToCreate: ['sudo', 'standard']
   },
-} satisfies Record<string, IProfile>
+} as Record<string, IProfile>;
+

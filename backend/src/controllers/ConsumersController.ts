@@ -23,13 +23,9 @@ export class ConsumersController {
       });
 
       res.json({ count, consumers });
-    } catch (error: unknown) {
-      // Tratamento de erro adicionado
-      if (error instanceof Error) {
-        res.status(500).json({ message: error.message });
-      } else {
-        res.status(500).json({ message: 'Unknown error occurred' });
-      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
+      res.status(500).json({ message: errorMessage });
     }
   }
 
@@ -38,7 +34,6 @@ export class ConsumersController {
    */
   public async signIn(req: Request, res: Response) {
     try {
-      // Validação do corpo da requisição
       if (typeof req.body !== 'object') {
         return res.status(400).json({ message: 'Bad Request: body must be an object' });
       }
@@ -57,6 +52,11 @@ export class ConsumersController {
         );
       }
 
+      // Verifique se a constante SECRET está presente e é uma string não vazia
+      if (!SECRET || typeof SECRET !== 'string' || SECRET.trim() === '') {
+        return res.status(500).json({ message: 'Internal Server Error: JWT secret is not set correctly' });
+      }
+
       const accessToken = await new Promise<string>((resolve, reject) => {
         jwt.sign(
           { scopes: [] },
@@ -69,20 +69,16 @@ export class ConsumersController {
           },
           (err, token) => {
             if (err) return reject(err);
-            if (!token) return reject(new Error('Token generation failed')); // Modificação na mensagem de erro
+            if (!token) return reject(new Error('Token generation failed'));
             resolve(token);
           }
         );
       });
 
       res.json({ access_token: accessToken, token_type: 'Bearer', expires_in: 3600 });
-    } catch (error: unknown) {
-      // Tratamento de erro adicionado
-      if (error instanceof Error) {
-        res.status(500).json({ message: error.message });
-      } else {
-        res.status(500).json({ message: 'Unknown error occurred' });
-      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
+      res.status(500).json({ message: errorMessage });
     }
   }
 
@@ -100,13 +96,9 @@ export class ConsumersController {
       }
 
       return res.json(consumer);
-    } catch (error: unknown) {
-      // Tratamento de erro adicionado
-      if (error instanceof Error) {
-        res.status(500).json({ message: error.message });
-      } else {
-        res.status(500).json({ message: 'Unknown error occurred' });
-      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
+      res.status(500).json({ message: errorMessage });
     }
   }
 
@@ -130,13 +122,9 @@ export class ConsumersController {
       });
 
       return res.json({ count, conversations });
-    } catch (error: unknown) {
-      // Tratamento de erro adicionado
-      if (error instanceof Error) {
-        res.status(500).json({ message: error.message });
-      } else {
-        res.status(500).json({ message: 'Unknown error occurred' });
-      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
+      res.status(500).json({ message: errorMessage });
     }
   }
 
@@ -147,13 +135,9 @@ export class ConsumersController {
     try {
       const consumer = await this.repository.save(req.body);
       res.json(consumer);
-    } catch (error: unknown) {
-      // Tratamento de erro adicionado
-      if (error instanceof Error) {
-        res.status(500).json({ message: error.message });
-      } else {
-        res.status(500).json({ message: 'Unknown error occurred' });
-      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
+      res.status(500).json({ message: errorMessage });
     }
   }
 
@@ -175,13 +159,9 @@ export class ConsumersController {
       );
 
       res.json(consumer);
-    } catch (error: unknown) {
-      // Tratamento de erro adicionado
-      if (error instanceof Error) {
-        res.status(500).json({ message: error.message });
-      } else {
-        res.status(500).json({ message: 'Unknown error occurred' });
-      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
+      res.status(500).json({ message: errorMessage });
     }
   }
 
@@ -200,13 +180,9 @@ export class ConsumersController {
 
       await this.repository.remove(consumer);
       res.json(consumer);
-    } catch (error: unknown) {
-      // Tratamento de erro adicionado
-      if (error instanceof Error) {
-        res.status(500).json({ message: error.message });
-      } else {
-        res.status(500).json({ message: 'Unknown error occurred' });
-      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
+      res.status(500).json({ message: errorMessage });
     }
   }
 
@@ -228,7 +204,6 @@ export class ConsumersController {
       const conversation = await database.getRepository(Conversation).save({
         consumer,
         messages: messages.map((message, index) => {
-          // Validação das mensagens
           if (typeof message !== 'object') throw new Error('Bad Request: messages must be an array of objects');
           if (typeof message.content !== 'string') throw new Error(`Bad Request: req.body.messages.${index}.content must be a string`);
           if (typeof message.by !== 'string') throw new Error(`Bad Request: req.body.messages.${index}.by must be a string`);
@@ -252,13 +227,9 @@ export class ConsumersController {
       res.status(201)
         .header('Location', `/conversations/${conversation.id}`)
         .json(conversation);
-    } catch (error: unknown) {
-      // Tratamento de erro adicionado
-      if (error instanceof Error) {
-        res.status(500).json({ message: error.message });
-      } else {
-        res.status(500).json({ message: 'Unknown error occurred' });
-      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
+      res.status(500).json({ message: errorMessage });
     }
   }
 }

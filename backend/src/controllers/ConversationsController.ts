@@ -1,235 +1,241 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { Request, Response } from "express";
-import { Consumer } from "../entities/Consumer.js";
-import { database } from "../services/database.js";
 import { Conversation } from "../entities/Conversation.js";
-import jwt from 'jsonwebtoken';
-import { APP_NAME, SECRET } from "../constants/env.js";
-import { FindOptionsWhere } from "typeorm";
+import { database } from "../services/database.js";
 import { ConversationMessage, ConversationMessageBy } from "../entities/ConversationMessage.js";
+import { User } from "../entities/User.js";
 
-export class ConsumersController {
+export class ConversationsController {
   protected get repository() {
-    return database.getRepository(Consumer);
+    return database.getRepository(Conversation);
   }
 
   /**
-   * GET /consumers
+   * GET /conversations
    */
   public async find(req: Request, res: Response) {
     try {
-      const [consumers, count] = await this.repository.findAndCount({
+      const [conversations, count] = await this.repository.findAndCount({
+        relations: { consumer: true },
         take: 25,
         skip: 0
       });
 
-      res.json({ count, consumers });
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
-      res.status(500).json({ message: errorMessage });
+      res.json({ count, conversations });
+    } catch (error: unknown) {
+      // Tratamento de erro adicionado
+      if (error instanceof Error) {
+        res.status(500).json({ message: error.message });
+      } else {
+        res.status(500).json({ message: 'Unknown error occurred' });
+      }
     }
   }
 
   /**
-   * PUT /consumers/sign-in
+   * GET /conversations/:conversation-id
    */
-  public async signIn(req: Request, res: Response) {
+  public async findOne(req: Request<{ conversationId: string }>, res: Response) {
     try {
-      if (typeof req.body !== 'object') {
-        return res.status(400).json({ message: 'Bad Request: body must be an object' });
-      }
-
-      if (typeof req.body.document !== 'string') {
-        return res.status(400).json({ message: 'Bad Request: body.document must be a string' });
-      }
-
-      let consumer = await this.repository.findOne({
-        where: { document: req.body.document }
+      const conversation = await this.repository.findOne({
+        relations: { consumer: true },
+        where: { id: req.params.conversationId }
       });
 
-      if (!consumer) {
-        consumer = await this.repository.save(
-          this.repository.create({ document: req.body.document })
-        );
-      }
-
-      // Verifique se a constante SECRET está presente e é uma string não vazia
-      if (!SECRET || typeof SECRET !== 'string' || SECRET.trim() === '') {
-        return res.status(500).json({ message: 'Internal Server Error: JWT secret is not set correctly' });
-      }
-
-      const accessToken = await new Promise<string>((resolve, reject) => {
-        jwt.sign(
-          { scopes: [] },
-          SECRET,
-          {
-            audience: APP_NAME,
-            issuer: APP_NAME,
-            expiresIn: '10m',
-            subject: `consumer:${consumer.id}`
-          },
-          (err, token) => {
-            if (err) return reject(err);
-            if (!token) return reject(new Error('Token generation failed'));
-            resolve(token);
+      if (conversation) {
+        if (req.token.sub.startsWith('consumer:')) {
+          if (conversation.consumer.id !== req.token.sub.split(':')[1]) {
+            return res.status(403).json({ message: 'Forbidden' });
           }
-        );
-      });
-
-      res.json({ access_token: accessToken, token_type: 'Bearer', expires_in: 3600 });
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
-      res.status(500).json({ message: errorMessage });
-    }
-  }
-
-  /**
-   * GET /consumers/:consumer-id
-   */
-  public async findOne(req: Request<{ consumerId: string }>, res: Response) {
-    try {
-      const consumer = await this.repository.findOne({
-        where: { id: req.params.consumerId }
-      });
-
-      if (!consumer) {
-        return res.status(404).json({ message: `Not found Consumer with ID ${req.params.consumerId}` });
+        }
+      } else {
+        return res.status(404).json({ message: `Not found Conversation with ID ${req.params.conversationId}` });
       }
 
-      return res.json(consumer);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
-      res.status(500).json({ message: errorMessage });
+      return res.json(conversation);
+    } catch (error: unknown) {
+      // Tratamento de erro adicionado
+      if (error instanceof Error) {
+        res.status(500).json({ message: error.message });
+      } else {
+        res.status(500).json({ message: 'Unknown error occurred' });
+      }
     }
   }
 
   /**
-   * GET /consumers/:consumer-id/conversations
+   * PUT /conversations
    */
-  public async findConversations(req: Request<{ consumerId: string }>, res: Response) {
+  public save(req: Request, res: Response): void {
+    return void 0;
+  }
+
+  /**
+   * PATCH /conversations
+   */
+  public update(req: Request, res: Response): void {
+    return void 0;
+  }
+
+  /**
+   * DELETE /conversations/:conversation-id
+   */
+  public async delete(req: Request<{ conversationId: string }>, res: Response) {
     try {
-      const consumer = await this.repository.findOne({
-        where: { id: req.params.consumerId }
+      const conversation = await this.repository.findOne({
+        relations: { consumer: true },
+        where: { id: req.params.conversationId }
       });
 
-      if (!consumer) {
-        return res.status(404).json({ message: `Not found Consumer with ID ${req.params.consumerId}` });
+      if (conversation) {
+        if (req.token.sub.startsWith('consumer:')) {
+          if (conversation.consumer.id !== req.token.sub.split(':')[1]) {
+            return res.status(403).json({ message: 'Forbidden' });
+          }
+        }
+      } else {
+        return res.status(404).json({ message: `Not found Conversation with ID ${req.params.conversationId}` });
       }
 
-      const filters: FindOptionsWhere<Conversation> = {};
-
-      const [conversations, count] = await database.getRepository(Conversation).findAndCount({
-        where: { ...filters, consumer: { id: consumer.id } }
-      });
-
-      return res.json({ count, conversations });
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
-      res.status(500).json({ message: errorMessage });
+      res.json(await this.repository.softRemove(conversation));
+    } catch (error: unknown) {
+      // Tratamento de erro adicionado
+      if (error instanceof Error) {
+        res.status(500).json({ message: error.message });
+      } else {
+        res.status(500).json({ message: 'Unknown error occurred' });
+      }
     }
   }
 
   /**
-   * PUT /consumers
+   * POST /conversations/:conversation-id/messages
    */
-  public async save(req: Request, res: Response) {
+  public async addMessage(req: Request<{ conversationId: string }>, res: Response) {
     try {
-      const consumer = await this.repository.save(req.body);
-      res.json(consumer);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
-      res.status(500).json({ message: errorMessage });
-    }
-  }
-
-  /**
-   * PATCH /consumers/:consumer-id
-   */
-  public async update(req: Request<{ consumerId: string }>, res: Response) {
-    try {
-      const consumer = await this.repository.findOne({
-        where: { id: req.params.consumerId }
+      const conversation = await this.repository.findOne({
+        relations: { consumer: true },
+        where: { id: req.params.conversationId }
       });
 
-      if (!consumer) {
-        return res.status(404).json({ message: `Not found Consumer with ID ${req.params.consumerId}` });
+      if (!conversation) {
+        return res.status(404).json({ message: `Not found Conversation with ID ${req.params.conversationId}` });
       }
 
-      await this.repository.save(
-        this.repository.merge(consumer, req.body)
+      let user: User | null = null;
+
+      if (!req.body.by) req.body.by = req.token.sub.startsWith('user:')
+        ? ConversationMessageBy.User
+        : req.token.sub.startsWith('consumer:')
+          ? ConversationMessageBy.Consumer
+          : null;
+
+      if (req.body.by === ConversationMessageBy.User) {
+        // Tenta encontrar o usuário que está adicionando a mensagem
+        if (req.token.sub.startsWith('user:')) {
+          const userId = req.token.sub.split(':')[1];
+
+          user = await database.manager.findOne(User, {
+            where: { id: userId }
+          });
+        } else if (req.body.user) {
+          user = await database.manager.findOne(User, {
+            where: { id: req.body.user }
+          });
+        }
+
+        if (!user) return res.status(400).json({ message: 'Not Found User' });
+
+        // Ele só pode adicionar mensagens como usuário se tiver permissão para isso
+        if (!req.token.scopes.includes('*')) {
+          if (!req.token.scopes.includes('users:*')) {
+            if (!req.token.scopes.includes('users:write')) {
+              if (!req.token.scopes.includes(`users:${user.id}:*`)) {
+                if (!req.token.scopes.includes(`users:${user.id}:write`)) {
+                  return res.status(403).json({ message: 'Forbidden' });
+                }
+              }
+            }
+          }
+        }
+      } else if (req.body.by === ConversationMessageBy.Consumer) {
+        // Se o token for de um consumidor, ele só pode adicionar mensagens em conversas que ele mesmo criou
+        if (req.token.sub.startsWith('consumer:')) {
+          const consumerId = req.token.sub.split(':')[1];
+
+          if (conversation.consumer.id !== consumerId) {
+            return res.status(403).json({ message: 'Forbidden' });
+          }
+        }
+        // Se ele está autenticado, ele pode adicionar mensagem como consumidor somente se tiver permissão para isso
+        else if (req.body.consumer) {
+          if (!req.token.scopes.includes('*')) {
+            if (!req.token.scopes.includes('consumers:*')) {
+              if (!req.token.scopes.includes('consumers:write')) {
+                if (!req.token.scopes.includes(`consumers:${conversation.consumer.id}:*`)) {
+                  if (!req.token.scopes.includes(`consumers:${conversation.consumer.id}:write`)) {
+                    return res.status(403).json({ message: 'Forbidden' });
+                  }
+                }
+              }
+            }
+          }
+        } else return res.status(400).json({ message: 'Invalid consumer' });
+      } else return res.status(400).json({ message: 'Invalid by' });
+
+      const message = await database.manager.save(
+        database.manager.create(ConversationMessage, {
+          conversation,
+          user,
+          content: req.body.content,
+          by: req.body.by,
+        }),
       );
 
-      res.json(consumer);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
-      res.status(500).json({ message: errorMessage });
+      res.json(message);
+    } catch (error: unknown) {
+      // Tratamento de erro adicionado
+      if (error instanceof Error) {
+        res.status(500).json({ message: error.message });
+      } else {
+        res.status(500).json({ message: 'Unknown error occurred' });
+      }
     }
   }
 
   /**
-   * DELETE /consumers/:consumer-id
+   * GET /conversations/:conversation-id/messages
    */
-  public async delete(req: Request<{ consumerId: string }>, res: Response) {
+  public async findMessages(req: Request<{ conversationId: string }>, res: Response) {
     try {
-      const consumer = await this.repository.findOne({
-        where: { id: req.params.consumerId }
+      const conversation = await this.repository.findOne({
+        relations: { consumer: true },
+        where: { id: req.params.conversationId }
       });
 
-      if (!consumer) {
-        return res.status(404).json({ message: `Not found Consumer with ID ${req.params.consumerId}` });
-      }
-
-      await this.repository.remove(consumer);
-      res.json(consumer);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
-      res.status(500).json({ message: errorMessage });
-    }
-  }
-
-  /**
-   * POST /consumers/:consumer-id/conversations
-   */
-  public async addConversation(req: Request<{ consumerId: string }>, res: Response) {
-    try {
-      const consumer = await this.repository.findOne({
-        where: { id: req.params.consumerId }
-      });
-
-      if (!consumer) {
-        return res.status(404).json({ message: `Not found Consumer with ID ${req.params.consumerId}` });
-      }
-
-      const messages: Record<string, unknown>[] = Array.isArray(req.body?.messages) ? req.body.messages : [];
-
-      const conversation = await database.getRepository(Conversation).save({
-        consumer,
-        messages: messages.map((message, index) => {
-          if (typeof message !== 'object') throw new Error('Bad Request: messages must be an array of objects');
-          if (typeof message.content !== 'string') throw new Error(`Bad Request: req.body.messages.${index}.content must be a string`);
-          if (typeof message.by !== 'string') throw new Error(`Bad Request: req.body.messages.${index}.by must be a string`);
-          if (!Object.values(ConversationMessageBy).includes(message.by as ConversationMessageBy)) {
-            throw new Error(`Bad Request: req.body.messages.${index}.by must be one of ${Object.values(ConversationMessageBy).join(', ')}`);
+      if (conversation) {
+        if (req.token.sub.startsWith('consumer:')) {
+          if (conversation.consumer.id !== req.token.sub.split(':')[1]) {
+            return res.status(403).json({ message: 'Forbidden' });
           }
-          if (typeof message.createdAt !== 'string') throw new Error(`Bad Request: req.body.messages.${index}.createdAt must be a string`);
-          
-          const createdAt = new Date(message.createdAt);
-          if (isNaN(createdAt.getTime())) throw new Error(`Bad Request: req.body.messages.${index}.createdAt must be a valid date`);
-          
-          return database.getRepository(ConversationMessage).create({
-            content: message.content,
-            by: message.by as ConversationMessageBy,
-            createdAt,
-          });
-        }),
-        subject: req.body.subject,
+        }
+      } else {
+        return res.status(404).json({ message: `Not found Conversation with ID ${req.params.conversationId}` });
+      }
+
+      const [messages, count] = await database.manager.findAndCount(ConversationMessage, {
+        where: { conversation: { id: conversation.id } },
+        order: { createdAt: 'DESC' }
       });
 
-      res.status(201)
-        .header('Location', `/conversations/${conversation.id}`)
-        .json(conversation);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
-      res.status(500).json({ message: errorMessage });
+      res.json({ count, messages });
+    } catch (error: unknown) {
+      // Tratamento de erro adicionado
+      if (error instanceof Error) {
+        res.status(500).json({ message: error.message });
+      } else {
+        res.status(500).json({ message: 'Unknown error occurred' });
+      }
     }
   }
 }
